@@ -76,10 +76,6 @@ function fmtTime(d) {
     const h = d.getHours(), m = d.getMinutes();
     return `${h % 12 || 12}${m ? ':' + pad2(m) : ''} ${h < 12 ? 'AM' : 'PM'}`;
 }
-function fmtHour(h) { // axis label for a fractional or whole hour (24 = midnight)
-    const x = h % 24;
-    return `${x % 12 || 12}${x < 12 ? 'a' : 'p'}`;
-}
 function fmtStamp(d) { return `${fmtDay(d)}, ${fmtTime(d)}`; }
 function eventDates(ev) {
     const a = parseDT(ev.startDate), b = parseDT(ev.endDate);
@@ -326,73 +322,64 @@ function renderSchedule() {
         t.append(el('b', '', 'Families'), untimed.map((f) => `${f.name} (${f.count})`).join(', '));
         card.appendChild(t);
     }
-    if (timed.some((x) => !x.b)) card.appendChild(el('div', 'sc-legend', 'Dashed end = leaving time not set · faded = maybe'));
+    if (timed.some((x) => !x.b)) card.appendChild(el('div', 'sc-legend', 'Windows are approximate · faded = maybe · no leave time = assumed to stay all day'));
 
     const foot = el('div', 'sc-foot');
     foot.append('Update your family here: ', el('b', '', shareLink().replace(/^https?:\/\//, '')));
     card.appendChild(foot);
 }
 
+// Four 6-hour windows per day
+const SLOTS = [
+    { name: 'Night', range: '12–6 AM' },
+    { name: 'Morning', range: '6 AM–12 PM' },
+    { name: 'Afternoon', range: '12–6 PM' },
+    { name: 'Evening', range: '6 PM–12 AM' }
+];
+
 function renderDay(day, timed) {
     const dStart = day, dEnd = addDays(day, 1);
-    // Segments of each family's stay that fall on this day, in hours from midnight
+    // Each family's stay on this day, in hours from midnight (open-ended stays run to the end of the day)
     const segs = timed
-        .filter((x) => x.a < dEnd && (x.b || x.a) >= dStart && (x.b ? x.b > dStart : x.a >= dStart))
-        .map((x) => {
-            const s = Math.max(x.a, dStart);
-            const hs = (s - dStart) / 36e5;
-            const he = x.b ? (Math.min(x.b, dEnd) - dStart) / 36e5 : null;
-            return { ...x, hs, he, cont: x.a < dStart, cont2: x.b && x.b > dEnd };
-        });
+        .filter((x) => x.a < dEnd && (x.b ? x.b > dStart : x.a >= dStart))
+        .map((x) => ({
+            ...x,
+            hs: Math.max(0, (x.a - dStart) / 36e5),
+            he: x.b ? Math.min(24, (x.b - dStart) / 36e5) : 24,
+            arrivesToday: x.a >= dStart,
+            leavesToday: !!x.b && x.b <= dEnd
+        }));
 
     const wrap = el('div', 'day');
     const here = segs.reduce((n, s) => n + s.f.count, 0);
     const head = el('div', 'day-head');
     head.append(el('b', '', fmtDay(day, true)), el('span', '', segs.length ? `${segs.length} famil${segs.length === 1 ? 'y' : 'ies'} · ~${here} people` : 'No one scheduled'));
     wrap.appendChild(head);
-    if (!segs.length) return wrap;
 
-    // Axis range: whole hours around the activity, at least 4 hours wide
-    let lo = Math.floor(Math.min(...segs.map((s) => s.hs)));
-    let hi = Math.ceil(Math.max(...segs.map((s) => s.he === null ? s.hs + 2 : s.he)));
-    if (hi - lo < 4) { hi = Math.min(24, lo + 4); lo = Math.max(0, hi - 4); }
-    const span = hi - lo;
-    const step = span <= 6 ? 1 : span <= 12 ? 2 : span <= 18 ? 3 : 4;
-    const pct = (h) => `${((h - lo) / span) * 100}%`;
-
-    const body = el('div', 'day-body');
-    const axis = el('div', 'axis');
-    for (let h = lo; h <= hi; h += step) { const t = el('i', '', fmtHour(h)); t.style.left = pct(h); axis.appendChild(t); }
-    body.appendChild(axis);
-
-    segs.forEach((s) => {
-        const lane = el('div', 'lane');
-        const who = el('div', 'lane-who');
-        const a = s.cont ? '←' : fmtTime(s.a);
-        const b = s.b ? (s.cont2 ? '→' : fmtTime(s.b)) : '?';
-        who.append(el('b', '', s.f.name), el('small', '', `${s.f.count} · ${a} – ${b}`));
-        const track = el('div', 'track');
-        track.style.setProperty('--tick', `${(step / span) * 100}%`);
-        const bar = el('div', 'bar' + (s.he === null ? ' open' : '') + (s.f.status === 'yes' ? '' : ' maybe'), String(s.f.count));
-        bar.style.left = pct(s.hs);
-        bar.style.width = `${(((s.he === null ? hi : s.he) - s.hs) / span) * 100}%`;
-        bar.style.background = s.color;
-        track.appendChild(bar);
-        lane.append(who, track);
-        body.appendChild(lane);
+    const grid = el('div', 'slots');
+    SLOTS.forEach((slot, i) => {
+        const lo = i * 6, hi = lo + 6;
+        const inSlot = segs.filter((s) => s.hs < hi && s.he > lo);
+        const total = inSlot.reduce((n, s) => n + s.f.count, 0);
+        const col = el('div', 'slot' + (inSlot.length ? '' : ' none'));
+        const sh = el('div', 'slot-head');
+        sh.append(el('b', '', slot.name), el('small', '', slot.range));
+        col.appendChild(sh);
+        const num = el('div', 'slot-total', inSlot.length ? `~${total}` : '–');
+        col.appendChild(num);
+        inSlot.forEach((s) => {
+            const chip = el('div', 'slot-chip' + (s.f.status === 'yes' ? '' : ' maybe'));
+            chip.style.borderLeftColor = s.color;
+            chip.appendChild(el('b', '', `${s.f.name} · ${s.f.count}`));
+            const notes = [];
+            if (s.arrivesToday && s.hs >= lo) notes.push(`in ${fmtTime(s.a)}`);
+            if (s.leavesToday && s.he <= hi && s.he > lo && s.he < 24) notes.push(`out ${fmtTime(s.b)}`);
+            if (notes.length) chip.appendChild(el('small', '', notes.join(' · ')));
+            col.appendChild(chip);
+        });
+        grid.appendChild(col);
     });
-
-    // Peak head-count of the day
-    const pts = [];
-    segs.forEach((s) => { pts.push([s.hs, 1, s.f.count]); pts.push([s.he === null ? 24 : s.he, 0, -s.f.count]); });
-    pts.sort((x, y) => x[0] - y[0] || x[1] - y[1]); // departures before arrivals at the same time
-    let cur = 0, peak = 0, peakAt = 0;
-    pts.forEach(([h, , d]) => { cur += d; if (cur > peak) { peak = cur; peakAt = h; } });
-    if (segs.length > 1) {
-        const at = new Date(dStart.getTime() + peakAt * 36e5);
-        body.appendChild(el('div', 'peak', `Busiest: ~${peak} people around ${fmtTime(at)}`));
-    }
-    wrap.appendChild(body);
+    wrap.appendChild(grid);
     return wrap;
 }
 
