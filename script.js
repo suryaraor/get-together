@@ -1,6 +1,6 @@
 // Get Together: plan who is coming to a get-together and when. Backend: Google Sheet via Apps Script (see Code.gs).
 // Paste your deployed Apps Script URL here, or enter it on the setup screen (saved in this browser only).
-const DEFAULT_URL = '';
+const DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbzZpnf0hEry5rCTMDn4SkBknsZml9tr6gwKh9RAtDmarBEIBOLVZ1TNDCswEnbeeus_/exec';
 const CONFIG = { appsScriptUrl: localStorage.getItem('gt_appsScriptUrl') || DEFAULT_URL };
 
 const $ = (id) => document.getElementById(id);
