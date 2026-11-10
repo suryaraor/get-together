@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Together</title>
+    <meta name="theme-color" content="#28231e">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Trirong:wght@500;600;700&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button id="backBtn" class="hdr-btn" aria-label="Back" style="display:none"></button>
+            <h1 id="hdrTitle"></h1>
+            <button id="editEventBtn" class="hdr-btn" aria-label="Edit get-together" style="display:none"></button>
+        </div>
+
+        <div id="loadingIndicator" class="loading">Loading…</div>
+        <div id="errorMessage" class="error-message" style="display:none"></div>
+
+        <!-- Home: all get-togethers -->
+        <section id="homeView" style="display:none">
+            <div class="section-head"><h2>Your get-togethers</h2><p>Plan who's coming, when they arrive and when they leave.</p></div>
+            <div id="eventList" class="event-list"></div>
+            <div class="pad"><button id="newEventBtn" class="primary-btn"></button></div>
+        </section>
+
+        <!-- One get-together -->
+        <section id="eventView" style="display:none">
+            <div class="summary" id="summary"></div>
+            <div class="tabs" role="tablist">
+                <button class="tab on" data-tab="families" role="tab"></button>
+                <button class="tab" data-tab="schedule" role="tab"></button>
+            </div>
+            <div id="familiesTab">
+                <div id="familyList" class="family-list"></div>
+                <div class="pad"><button id="addFamilyBtn" class="primary-btn"></button></div>
+            </div>
+            <div id="scheduleTab" style="display:none">
+                <div class="schedule-wrap"><div id="shareCard" class="share-card"></div></div>
+            </div>
+            <div class="pad share-pad"><button id="shareBtn" class="share-btn"></button></div>
+        </section>
+
+        <!-- First-run setup -->
+        <section id="setupView" class="setup" style="display:none">
+            <h2>Connect to Google Sheet</h2>
+            <p>Paste the Apps Script web app URL (see README.md). It is saved in this browser only.</p>
+            <input type="text" id="urlInput" class="field" placeholder="https://script.google.com/macros/s/.../exec">
+            <button id="saveUrlBtn" class="primary-btn">Save &amp; load</button>
+        </section>
+    </div>
+
+    <div id="toast" class="toast" style="display:none"></div>
+    <div id="sheetBackdrop" class="sheet-backdrop" style="display:none"></div>
+
+    <!-- Family sheet -->
+    <div id="familySheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="famTitle" style="display:none">
+        <div class="sheet-grip"></div>
+        <div class="sheet-head"><h3 id="famTitle"></h3><button class="sheet-close" data-close aria-label="Close"></button></div>
+        <label class="lbl" for="famName">Family name</label>
+        <input id="famName" class="field" type="text" autocomplete="off" autocapitalize="words" placeholder="e.g. Sharma family">
+        <label class="lbl">How many people (approx.)</label>
+        <div class="stepper big"><button type="button" id="famMinus" aria-label="Fewer"></button><output id="famCount">2</output><button type="button" id="famPlus" aria-label="More"></button></div>
+        <label class="lbl">Status</label>
+        <div class="seg"><button type="button" data-status="maybe">Maybe</button><button type="button" data-status="yes">Confirmed</button></div>
+        <div class="row2">
+            <div><label class="lbl" for="famArrive">Arrives</label><input id="famArrive" class="field" type="datetime-local"></div>
+            <div><label class="lbl" for="famLeave">Leaves</label><input id="famLeave" class="field" type="datetime-local"></div>
+        </div>
+        <label class="lbl" for="famNotes">Notes (optional)</label>
+        <input id="famNotes" class="field" type="text" placeholder="e.g. bringing dessert, 2 kids">
+        <button id="famSave" class="primary-btn sheet-save">Save</button>
+        <button id="famDelete" class="danger-btn" style="display:none">Remove family</button>
+    </div>
+
+    <!-- Event sheet (create / edit) -->
+    <div id="eventSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="evTitle" style="display:none">
+        <div class="sheet-grip"></div>
+        <div class="sheet-head"><h3 id="evTitle"></h3><button class="sheet-close" data-close aria-label="Close"></button></div>
+        <label class="lbl" for="evName">Name</label>
+        <input id="evName" class="field" type="text" autocomplete="off" autocapitalize="words" placeholder="e.g. Diwali get-together">
+        <div class="row2">
+            <div><label class="lbl" for="evStart">From</label><input id="evStart" class="field" type="date"></div>
+            <div><label class="lbl" for="evEnd">To</label><input id="evEnd" class="field" type="date"></div>
+        </div>
+        <label class="lbl" for="evLoc">Place (optional)</label>
+        <input id="evLoc" class="field" type="text" placeholder="e.g. Our house, 12 Oak St">
+        <div id="evFamBox">
+            <label class="lbl" for="evFams">Families who might join (optional)</label>
+            <textarea id="evFams" class="field" rows="5" placeholder="One per line, with approx. count:&#10;Sharma 4&#10;Reddy, 3&#10;Iyer family 5"></textarea>
+        </div>
+        <button id="evSave" class="primary-btn sheet-save">Create</button>
+        <button id="evDelete" class="danger-btn" style="display:none">Delete this get-together</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="script.js?v=1"></script>
+</body>
+</html>
