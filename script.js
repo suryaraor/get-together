@@ -311,7 +311,7 @@ function renderSchedule() {
     if (!dayList.length) {
         card.appendChild(el('div', 'empty', 'Add arrival and leaving times to families to see the schedule here.'));
     }
-    dayList.forEach((day) => card.appendChild(renderDay(day, timed)));
+    if (dayList.length) { const sc = el('div', 'mx-scroll'); sc.appendChild(renderMatrix(dayList, timed)); card.appendChild(sc); }
 
     if (untimed.length && dayList.length) {
         const t = el('div', 'tbd');
@@ -322,7 +322,7 @@ function renderSchedule() {
         t.append(el('b', '', 'Families'), untimed.map((f) => `${f.name} (${f.count})`).join(', '));
         card.appendChild(t);
     }
-    if (timed.some((x) => !x.b)) card.appendChild(el('div', 'sc-legend', 'Windows are approximate · faded = maybe · no leave time = assumed to stay all day'));
+    if (timed.length) card.appendChild(el('div', 'sc-legend', 'Blocks = 6-hour windows (12a, 6a, 12p, 6p) · faded = maybe · no leave time = stays all day'));
 
     const foot = el('div', 'sc-foot');
     foot.append('Update your family here: ', el('b', '', shareLink().replace(/^https?:\/\//, '')));
@@ -330,56 +330,63 @@ function renderSchedule() {
 }
 
 // Four 6-hour windows per day
-const SLOTS = [
-    { name: 'Night', range: '12–6 AM' },
-    { name: 'Morning', range: '6 AM–12 PM' },
-    { name: 'Afternoon', range: '12–6 PM' },
-    { name: 'Evening', range: '6 PM–12 AM' }
-];
+const SLOT_LABELS = ['12a', '6a', '12p', '6p'];
 
-function renderDay(day, timed) {
-    const dStart = day, dEnd = addDays(day, 1);
-    // Each family's stay on this day, in hours from midnight (open-ended stays run to the end of the day)
-    const segs = timed
-        .filter((x) => x.a < dEnd && (x.b ? x.b > dStart : x.a >= dStart))
-        .map((x) => ({
-            ...x,
-            hs: Math.max(0, (x.a - dStart) / 36e5),
-            he: x.b ? Math.min(24, (x.b - dStart) / 36e5) : 24,
-            arrivesToday: x.a >= dStart,
-            leavesToday: !!x.b && x.b <= dEnd
-        }));
+// Matrix: dates are columns, families are rows; each cell is four 6-hour blocks, filled when the family is there
+function renderMatrix(dayList, timed) {
+    const wrap = el('div', 'matrix');
+    wrap.style.gridTemplateColumns = `118px repeat(${dayList.length}, minmax(76px, 1fr))`;
+    const add = (cls, ...kids) => { const c = el('div', cls); c.append(...kids); wrap.appendChild(c); return c; };
 
-    const wrap = el('div', 'day');
-    const here = segs.reduce((n, s) => n + s.f.count, 0);
-    const head = el('div', 'day-head');
-    head.append(el('b', '', fmtDay(day, true)), el('span', '', segs.length ? `${segs.length} famil${segs.length === 1 ? 'y' : 'ies'} · ~${here} people` : 'No one scheduled'));
-    wrap.appendChild(head);
+    // Per family and day: which of the 4 slots they are present in (open-ended stays run to the end of the day)
+    const presence = (x, day) => {
+        const dEnd = addDays(day, 1);
+        if (!(x.a < dEnd && (x.b ? x.b > day : x.a >= day))) return null;
+        const hs = Math.max(0, (x.a - day) / 36e5), he = x.b ? Math.min(24, (x.b - day) / 36e5) : 24;
+        return [0, 1, 2, 3].map((i) => hs < i * 6 + 6 && he > i * 6);
+    };
 
-    const grid = el('div', 'slots');
-    SLOTS.forEach((slot, i) => {
-        const lo = i * 6, hi = lo + 6;
-        const inSlot = segs.filter((s) => s.hs < hi && s.he > lo);
-        const total = inSlot.reduce((n, s) => n + s.f.count, 0);
-        const col = el('div', 'slot' + (inSlot.length ? '' : ' none'));
-        const sh = el('div', 'slot-head');
-        sh.append(el('b', '', slot.name), el('small', '', slot.range));
-        col.appendChild(sh);
-        const num = el('div', 'slot-total', inSlot.length ? `~${total}` : '–');
-        col.appendChild(num);
-        inSlot.forEach((s) => {
-            const chip = el('div', 'slot-chip' + (s.f.status === 'yes' ? '' : ' maybe'));
-            chip.style.borderLeftColor = s.color;
-            chip.appendChild(el('b', '', `${s.f.name} · ${s.f.count}`));
-            const notes = [];
-            if (s.arrivesToday && s.hs >= lo) notes.push(`in ${fmtTime(s.a)}`);
-            if (s.leavesToday && s.he <= hi && s.he > lo && s.he < 24) notes.push(`out ${fmtTime(s.b)}`);
-            if (notes.length) chip.appendChild(el('small', '', notes.join(' · ')));
-            col.appendChild(chip);
-        });
-        grid.appendChild(col);
+    // Header row
+    add('mx-corner', el('small', '', 'Family'));
+    dayList.forEach((d) => {
+        const h = el('div', 'mx-day');
+        h.append(el('b', '', d.toLocaleDateString(undefined, { weekday: 'short' })), el('span', '', d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })));
+        const ticks = el('div', 'mx-ticks');
+        SLOT_LABELS.forEach((t) => ticks.appendChild(el('i', '', t)));
+        h.appendChild(ticks);
+        wrap.appendChild(h);
     });
-    wrap.appendChild(grid);
+
+    // One row per family
+    const totals = dayList.map(() => [0, 0, 0, 0]);
+    timed.forEach((x) => {
+        const who = el('div', 'mx-who');
+        who.append(el('b', '', x.f.name), el('small', '', `${x.f.count} · ${famWhen(x.f)}`));
+        wrap.appendChild(who);
+        dayList.forEach((d, di) => {
+            const p = presence(x, d);
+            const cell = el('div', 'mx-cell');
+            const blocks = el('div', 'mx-blocks');
+            [0, 1, 2, 3].forEach((i) => {
+                const on = p && p[i];
+                const b = el('span', on ? 'on' + (x.f.status === 'yes' ? '' : ' maybe') : '');
+                if (on) { b.style.background = x.color; totals[di][i] += x.f.count; }
+                blocks.appendChild(b);
+            });
+            cell.appendChild(blocks);
+            wrap.appendChild(cell);
+        });
+    });
+
+    // Totals row: approximate people per window
+    add('mx-who mx-total', el('b', '', 'People'), el('small', '', 'approx. per window'));
+    totals.forEach((t) => {
+        const cell = el('div', 'mx-cell mx-total');
+        const nums = el('div', 'mx-nums');
+        t.forEach((n) => nums.appendChild(el('span', n ? '' : 'z', n ? String(n) : '·')));
+        cell.appendChild(nums);
+        wrap.appendChild(cell);
+    });
     return wrap;
 }
 
@@ -397,7 +404,17 @@ async function shareSchedule() {
         setTab('schedule');
         await nextFrame();
         if (document.fonts && document.fonts.ready) await document.fonts.ready;
-        const canvas = await html2canvas($('shareCard'), { scale: 2, backgroundColor: '#faf7f0', useCORS: true });
+        const cardEl = $('shareCard');
+        const mx = cardEl.querySelector('.matrix');
+        const wide = Math.max(cardEl.offsetWidth, mx ? mx.scrollWidth + 24 : 0);
+        const canvas = await html2canvas(cardEl, { scale: 2, width: wide, windowWidth: wide + 40,
+            onclone: (doc) => {
+                const c = doc.getElementById('shareCard');
+                c.style.width = wide + 'px';
+                c.querySelectorAll('.mx-scroll').forEach((n) => { n.style.overflow = 'visible'; });
+                c.querySelectorAll('.mx-who, .mx-corner').forEach((n) => { n.style.position = 'static'; });
+            },
+            backgroundColor: '#faf7f0', useCORS: true });
         const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
         const file = new File([blob], `${state.event.name.replace(/[^\w]+/g, '-')}-schedule.png`, { type: 'image/png' });
         const text = `${state.event.name}${eventDates(state.event) ? ' · ' + eventDates(state.event) : ''}\nWho's coming & when. See or update here: ${shareLink()}`;
