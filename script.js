@@ -309,36 +309,33 @@ function renderSchedule() {
     const dayList = [...days.values()].sort((a, b) => a - b);
 
     if (!dayList.length) {
-        card.appendChild(el('div', 'empty', 'Add arrival and leaving times to families to see the schedule here.'));
+        card.appendChild(el('div', 'empty', 'Add arrival times to see the schedule.'));
     }
     if (dayList.length) { const sc = el('div', 'mx-scroll'); sc.appendChild(renderMatrix(dayList, timed)); card.appendChild(sc); }
 
     if (untimed.length && dayList.length) {
         const t = el('div', 'tbd');
-        t.append(el('b', '', 'Time not set yet'), untimed.map((f) => `${f.name} (${f.count})`).join(', '));
+        t.append(el('b', '', 'No time yet'), untimed.map((f) => `${f.name} (${f.count})`).join(', '));
         card.appendChild(t);
     } else if (untimed.length) {
         const t = el('div', 'tbd');
         t.append(el('b', '', 'Families'), untimed.map((f) => `${f.name} (${f.count})`).join(', '));
         card.appendChild(t);
     }
-    if (timed.length) card.appendChild(el('div', 'sc-legend', 'Blocks = 6-hour windows (12a, 6a, 12p, 6p) · faded = maybe · no leave time = stays all day'));
+    if (timed.length) card.appendChild(el('div', 'sc-legend', 'Blocks: night · morning · afternoon · evening  (faded = maybe)'));
 
     const foot = el('div', 'sc-foot');
-    foot.append('Update your family here: ', el('b', '', shareLink().replace(/^https?:\/\//, '')));
+    foot.append('Update: ', el('b', '', shareLink().replace(/^https?:\/\//, '')));
     card.appendChild(foot);
 }
 
-// Four 6-hour windows per day
-const SLOT_LABELS = ['12a', '6a', '12p', '6p'];
-
-// Matrix: dates are columns, families are rows; each cell is four 6-hour blocks, filled when the family is there
+// Matrix: dates are columns, families are rows; each cell is four 6-hour blocks (night, morning, afternoon, evening)
 function renderMatrix(dayList, timed) {
     const wrap = el('div', 'matrix');
-    wrap.style.gridTemplateColumns = `118px repeat(${dayList.length}, minmax(76px, 1fr))`;
+    wrap.style.setProperty('--n', dayList.length);
     const add = (cls, ...kids) => { const c = el('div', cls); c.append(...kids); wrap.appendChild(c); return c; };
 
-    // Per family and day: which of the 4 slots they are present in (open-ended stays run to the end of the day)
+    // Which of a day's 4 slots a family is there (no leave time = stays to the end of the day)
     const presence = (x, day) => {
         const dEnd = addDays(day, 1);
         if (!(x.a < dEnd && (x.b ? x.b > day : x.a >= day))) return null;
@@ -346,47 +343,41 @@ function renderMatrix(dayList, timed) {
         return [0, 1, 2, 3].map((i) => hs < i * 6 + 6 && he > i * 6);
     };
 
-    // Header row
-    add('mx-corner', el('small', '', 'Family'));
-    dayList.forEach((d) => {
+    add('mx-corner');
+    dayList.forEach((d, i) => {
         const h = el('div', 'mx-day');
-        h.append(el('b', '', d.toLocaleDateString(undefined, { weekday: 'short' })), el('span', '', d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })));
-        const ticks = el('div', 'mx-ticks');
-        SLOT_LABELS.forEach((t) => ticks.appendChild(el('i', '', t)));
-        h.appendChild(ticks);
+        const newMonth = i === 0 || d.getMonth() !== dayList[i - 1].getMonth();
+        h.append(
+            el('small', '', newMonth ? d.toLocaleDateString(undefined, { month: 'short' }) : ' '),
+            el('b', '', d.toLocaleDateString(undefined, { weekday: 'short' })),
+            el('span', '', String(d.getDate()))
+        );
         wrap.appendChild(h);
     });
 
-    // One row per family
-    const totals = dayList.map(() => [0, 0, 0, 0]);
+    const totals = dayList.map(() => 0);
     timed.forEach((x) => {
         const who = el('div', 'mx-who');
-        who.append(el('b', '', x.f.name), el('small', '', `${x.f.count} · ${famWhen(x.f)}`));
+        who.append(el('b', '', x.f.name), el('small', '', String(x.f.count)));
         wrap.appendChild(who);
         dayList.forEach((d, di) => {
             const p = presence(x, d);
-            const cell = el('div', 'mx-cell');
+            if (p && p.some(Boolean)) totals[di] += x.f.count;
             const blocks = el('div', 'mx-blocks');
             [0, 1, 2, 3].forEach((i) => {
                 const on = p && p[i];
-                const b = el('span', on ? 'on' + (x.f.status === 'yes' ? '' : ' maybe') : '');
-                if (on) { b.style.background = x.color; totals[di][i] += x.f.count; }
+                const b = el('span', on && x.f.status !== 'yes' ? 'maybe' : '');
+                if (on) b.style.background = x.color;
                 blocks.appendChild(b);
             });
+            const cell = el('div', 'mx-cell');
             cell.appendChild(blocks);
             wrap.appendChild(cell);
         });
     });
 
-    // Totals row: approximate people per window
-    add('mx-who mx-total', el('b', '', 'People'), el('small', '', 'approx. per window'));
-    totals.forEach((t) => {
-        const cell = el('div', 'mx-cell mx-total');
-        const nums = el('div', 'mx-nums');
-        t.forEach((n) => nums.appendChild(el('span', n ? '' : 'z', n ? String(n) : '·')));
-        cell.appendChild(nums);
-        wrap.appendChild(cell);
-    });
+    add('mx-who mx-total', el('b', '', 'Total'));
+    totals.forEach((n) => add('mx-cell mx-total', el('span', n ? '' : 'z', n ? `~${n}` : '–')));
     return wrap;
 }
 
