@@ -3,12 +3,12 @@
 // Deploy > New deployment > Web app (Execute as: Me, Who has access: Anyone). See README.md.
 //
 // Two tabs are created automatically the first time the app calls it:
-//   Events   : id, name, startDate, endDate, location, notes, created
+//   Events   : id, name, startDate, endDate, location, notes, created, slug
 //   Families : id, eventId, name, count, status, arrive, leave, notes
 
 const SHEET_ID = '13GKm58mqYhb7DQKM4BtRSvwfu3PGJksjKH9akbqXoGI';
 const TABS = {
-    Events: ['id', 'name', 'startDate', 'endDate', 'location', 'notes', 'created'],
+    Events: ['id', 'name', 'startDate', 'endDate', 'location', 'notes', 'created', 'slug'],
     Families: ['id', 'eventId', 'name', 'count', 'status', 'arrive', 'leave', 'notes']
 };
 const DATE_FIELDS = { startDate: 'yyyy-MM-dd', endDate: 'yyyy-MM-dd', arrive: "yyyy-MM-dd'T'HH:mm", leave: "yyyy-MM-dd'T'HH:mm" };
@@ -36,7 +36,7 @@ function handle(p) {
         case 'getEvent': return eventData(need(p, 'eventId'));
         case 'createEvent': {
             const id = newId();
-            insert('Events', { id, name: need(p, 'name'), startDate: p.startDate || '', endDate: p.endDate || '', location: p.location || '', notes: p.notes || '', created: new Date().toISOString() });
+            insert('Events', { id, name: need(p, 'name'), startDate: p.startDate || '', endDate: p.endDate || '', location: p.location || '', notes: p.notes || '', created: new Date().toISOString(), slug: uniqueSlug(p.name) });
             JSON.parse(p.families || '[]').forEach(f => insertFamily(id, f));
             return eventData(id);
         }
@@ -64,9 +64,9 @@ function eventList() {
 }
 
 function eventData(eventId) {
-    const ev = rows('Events').filter(e => e.id === eventId)[0];
+    const ev = rows('Events').filter(e => e.id === eventId || (e.slug && e.slug === eventId))[0]; // id or slug
     if (!ev) throw new Error('Get-together not found');
-    return { success: true, event: clean(ev), families: rows('Families').filter(f => f.eventId === eventId).map(clean) };
+    return { success: true, event: clean(ev), families: rows('Families').filter(f => f.eventId === ev.id).map(clean) };
 }
 
 function familyEvent(id) {
@@ -90,6 +90,12 @@ function sheet(name) {
         sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
         sh.getRange(1, 1, sh.getMaxRows(), cols.length).setNumberFormat('@'); // keep dates/ids as plain text
         sh.setFrozenRows(1);
+    }
+    // Add any columns introduced after the tab was first created
+    const cols = TABS[name];
+    if (sh.getLastColumn() < cols.length) {
+        sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
+        sh.getRange(1, 1, sh.getMaxRows(), cols.length).setNumberFormat('@');
     }
     return sh;
 }
@@ -119,7 +125,7 @@ function update(name, id, p) {
     if (!row) throw new Error('Not found');
     const sh = sheet(name);
     TABS[name].forEach((c, j) => {
-        if (c === 'id' || c === 'eventId' || c === 'created' || !Object.prototype.hasOwnProperty.call(p, c)) return;
+        if (c === 'id' || c === 'eventId' || c === 'created' || c === 'slug' || !Object.prototype.hasOwnProperty.call(p, c)) return;
         let v = p[c];
         if (c === 'name' && !String(v).trim()) throw new Error('Name is required');
         if (c === 'count') v = Math.max(1, Math.round(Number(v)) || 1);
@@ -135,5 +141,13 @@ function remove(name, id) {
 function need(o, k) {
     if (o[k] === undefined || String(o[k]).trim() === '') throw new Error('Missing ' + k);
     return String(o[k]).trim();
+}
+// URL-friendly name: "Diwali Get-together!" -> "diwali-get-together"; adds -2, -3... if already used
+function uniqueSlug(name) {
+    const base = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'get-together';
+    const used = rows('Events').map(e => e.slug);
+    let slug = base, n = 2;
+    while (used.indexOf(slug) >= 0) slug = base + '-' + n++;
+    return slug;
 }
 function newId() { return Utilities.getUuid().replace(/-/g, '').slice(0, 8); }

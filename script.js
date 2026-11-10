@@ -132,7 +132,7 @@ async function init() {
     route();
 }
 
-const eventIdFromHash = () => (/^#\/e\/([\w-]+)/.exec(location.hash) || [])[1] || null;
+const eventIdFromHash = () => (/^#\/(?:e\/)?([\w-]+)/.exec(location.hash) || [])[1] || null;
 
 async function route(quiet) {
     showError('');
@@ -189,7 +189,7 @@ function renderHome() {
         const big = el('div', 'big', String(ev.people));
         big.appendChild(el('small', '', `${ev.familyCount} famil${ev.familyCount === 1 ? 'y' : 'ies'}`));
         card.append(meta, big);
-        card.addEventListener('click', () => { state.tab = 'families'; location.hash = `#/e/${ev.id}`; });
+        card.addEventListener('click', () => { state.tab = 'families'; location.hash = `#/${ev.slug || ev.id}`; });
         list.appendChild(card);
     });
 }
@@ -391,7 +391,7 @@ function renderMatrix(dayList, timed) {
 }
 
 // ---------- Share: screenshot of the schedule + link, to WhatsApp ----------
-const shareLink = () => `${location.origin}${location.pathname}#/e/${state.event.id}`;
+const shareLink = () => `${location.origin}${location.pathname}#/${state.event.slug || state.event.id}`;
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
 async function shareSchedule() {
@@ -580,7 +580,7 @@ async function saveEvent() {
             const d = await api({ action: 'createEvent', ...data, families: JSON.stringify(parseFamilies($('evFams').value)) });
             closeSheet();
             state.tab = 'families';
-            location.hash = `#/e/${d.event.id}`;
+            location.hash = `#/${d.event.slug || d.event.id}`;
         }
     } catch (err) { toast(err.message); }
     btn.disabled = false;
