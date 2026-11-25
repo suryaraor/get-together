@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Trirong:wght@500;600;700&amp;display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=1">
+    <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
     <div class="container">
@@ -73,6 +73,9 @@
         </div>
         <label class="lbl" for="famNotes">Notes (optional)</label>
         <input id="famNotes" class="field" type="text" placeholder="e.g. bringing dessert, 2 kids">
+        <label class="lbl" for="famFlight">Flight details (optional)</label>
+        <textarea id="famFlight" class="field" rows="4" placeholder="Paste the airline confirmation, e.g.&#10;Departing Flight: Wed, Nov 25, 2026&#10;Flight #: 4904&#10;Departs: 04:50 PM HOU&#10;Arrives: 08:05 PM IND"></textarea>
+        <div id="famFlightPreview" class="flight-box" style="display:none"></div>
         <button id="famSave" class="primary-btn sheet-save">Save</button>
         <button id="famDelete" class="danger-btn" style="display:none">Remove family</button>
     </div>
@@ -98,6 +101,6 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="script.js?v=1"></script>
+    <script src="script.js?v=2"></script>
 </body>
 </html>

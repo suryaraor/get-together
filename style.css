@@ -84,6 +84,12 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .fam.yes .chip { background: #3b8454; }
 .fam-when { font-size: 13px; color: #676055; margin-top: 3px; display: flex; align-items: center; gap: 5px; }
 .fam-when .ic { width: 14px; height: 14px; }
+.fam-flight { font-size: 12px; color: #2f6fa3; margin-top: 3px; display: flex; align-items: center; gap: 5px; }
+.fam-flight .ic { width: 14px; height: 14px; }
+.flight-box { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: #eef4f9; }
+.flight-box .fam-flight { font-size: 13px; }
+.link-btn { margin-top: 8px; padding: 0; border: none; background: none; color: #cf4520; font-weight: 600; font-size: 14px; text-decoration: underline; }
+.tbd.flights .fl-row { margin-top: 3px; }
 .fam-note { font-size: 12px; color: #8a8173; margin-top: 2px; }
 .stepper { display: flex; align-items: center; gap: 2px; background: white; border-radius: 999px; border: 1.5px solid #d4ccbc; padding: 2px; flex: none; }
 .stepper button { width: 34px; height: 34px; border-radius: 50%; border: none; background: #f3eee4; display: grid; place-items: center; }

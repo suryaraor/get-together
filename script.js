@@ -19,6 +19,7 @@ const ICONS = {
     pin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
     chart: '<path d="M3 3v18h18"/><path d="M7 8h7M7 13h10M7 18h5"/>',
     whatsapp: '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 20.5l1.7-5.4A8.4 8.4 0 1 1 21 11.5Z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.2-2-1-.8.7c-.8-.4-1.5-1.1-1.9-1.9l.7-.8-1-2Z"/>',
+    plane: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
     flower: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>'
 };
 function icon(name, cls) {
@@ -90,6 +91,50 @@ function famWhen(f) {
     if (a) return `Arrives ${fmtStamp(a)}`;
     if (b) return `Leaves ${fmtStamp(b)}`;
     return 'Time not set yet';
+}
+
+// ---------- Flights: parse a pasted airline confirmation into legs ----------
+// Understands blocks like "Departing Flight: Wed, Nov 25, 2026 / Flight #: 4904 / Departs: 04:50 PM HOU / Arrives: 08:05 PM IND".
+// Text it can't read is still saved; the card then just says flight details were added.
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+function parseFlightDate(s) {
+    const m = /([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/.exec(s || '');
+    const mi = m ? MONTHS.indexOf(m[1].toLowerCase()) : -1;
+    return mi >= 0 ? new Date(+m[3], mi, +m[2]) : null;
+}
+function atTime(day, s) {
+    const m = /(\d{1,2}):(\d{2})\s*(?:([AaPp])\.?[Mm]\.?)?/.exec(s || '');
+    if (!day || !m) return null;
+    const h = m[3] ? (+m[1] % 12) + (/p/i.test(m[3]) ? 12 : 0) : +m[1];
+    return new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, +m[2]);
+}
+function parseFlights(text) {
+    const legs = [];
+    let leg = null;
+    const val = (line) => line.slice(line.indexOf(':') + 1).trim();
+    const airport = (v) => (/\b([A-Z]{3})\s*$/.exec(v) || [])[1] || '';
+    (text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).forEach((line) => {
+        if (/^flight\s*(#|no\b|number)/i.test(line)) { if (leg) leg.number = val(line); }
+        else if (/^[\w ]*flight\s*:/i.test(line)) {
+            leg = { label: line.slice(0, line.indexOf(':')).replace(/\s*flight\s*$/i, '').trim(), day: parseFlightDate(val(line)) };
+            legs.push(leg);
+        } else if (leg && /^depart/i.test(line)) { leg.dep = atTime(leg.day, val(line)); leg.from = airport(val(line)); }
+        else if (leg && /^arriv/i.test(line)) { leg.arr = atTime(leg.day, val(line)); leg.to = airport(val(line)); }
+    });
+    legs.forEach((l) => { if (l.dep && l.arr && l.arr < l.dep) l.arr = new Date(+l.arr + 864e5); }); // lands the next day
+    return legs.filter((l) => l.dep || l.arr);
+}
+const toLocalInput = (d) => `${dayKey(d)}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+// "Wed, Nov 25 · #4904 · HOU 4:50 PM → IND 8:05 PM"
+function legText(l) {
+    const end = (code, t) => [code, t && fmtTime(t)].filter(Boolean).join(' ');
+    const route = [end(l.from, l.dep), end(l.to, l.arr)].filter(Boolean).join(' → ');
+    return [fmtDay(l.dep || l.arr), l.number ? `#${l.number}` : '', route].filter(Boolean).join(' · ');
+}
+function flightLine(text) {
+    const line = el('div', 'fam-flight');
+    line.append(icon('plane'), text);
+    return line;
 }
 
 // ---------- Router ----------
@@ -239,6 +284,11 @@ function renderFamilies() {
         const when = el('div', 'fam-when');
         when.append(icon('clock'), famWhen(f));
         main.append(name, when);
+        if (f.flight) {
+            const legs = parseFlights(f.flight);
+            if (legs.length) legs.forEach((l) => main.appendChild(flightLine(legText(l))));
+            else main.appendChild(flightLine('Flight details added'));
+        }
         if (f.notes) main.appendChild(el('div', 'fam-note', f.notes));
         main.addEventListener('click', () => openFamilySheet(f));
 
@@ -320,6 +370,18 @@ function renderSchedule() {
     } else if (untimed.length) {
         const t = el('div', 'tbd');
         t.append(el('b', '', 'Families'), untimed.map((f) => `${f.name} (${f.count})`).join(', '));
+        card.appendChild(t);
+    }
+    // Flight list on the shared picture, so whoever is doing airport pickups can see it
+    const flyers = state.families.map((f) => ({ f, legs: parseFlights(f.flight) })).filter((x) => x.legs.length);
+    if (flyers.length) {
+        const t = el('div', 'tbd flights');
+        t.appendChild(el('b', '', 'Flights'));
+        flyers.forEach(({ f, legs }) => legs.forEach((l) => {
+            const r = el('div', 'fl-row');
+            r.append(el('strong', '', f.name), ` ${legText(l)}`);
+            t.appendChild(r);
+        }));
         card.appendChild(t);
     }
     if (timed.length) card.appendChild(el('div', 'sc-legend', 'Blocks: night · morning · afternoon · evening  (faded = maybe)'));
@@ -466,9 +528,29 @@ function initFamilySheet() {
     $('famSave').addEventListener('click', saveFamily);
     $('famDelete').addEventListener('click', deleteFamily);
     // Picking an arrival should pre-fill leaving on the same day so only the time needs changing
+    $('famFlight').addEventListener('input', renderFlightPreview);
     $('famArrive').addEventListener('change', () => {
         if ($('famArrive').value && !$('famLeave').value) $('famLeave').value = $('famArrive').value.slice(0, 11) + '18:00';
     });
+}
+// Shows the parsed flights under the box, plus a button to copy the landing / take-off times into Arrives / Leaves
+function renderFlightPreview() {
+    const box = $('famFlightPreview');
+    const legs = parseFlights($('famFlight').value);
+    box.replaceChildren();
+    show('famFlightPreview', legs.length > 0);
+    if (!legs.length) return;
+    legs.forEach((l) => box.appendChild(flightLine((l.label ? `${l.label}: ` : '') + legText(l))));
+    const arrive = legs[0].arr, leave = legs.length > 1 ? legs[legs.length - 1].dep : null;
+    if (!arrive && !leave) return;
+    const b = el('button', 'link-btn', leave ? 'Use flight times for Arrives / Leaves' : 'Use landing time for Arrives');
+    b.type = 'button';
+    b.addEventListener('click', () => {
+        if (arrive) $('famArrive').value = toLocalInput(arrive);
+        if (leave) $('famLeave').value = toLocalInput(leave);
+        toast('Times set from the flights. Adjust for airport travel if needed.');
+    });
+    box.appendChild(b);
 }
 function setStatus(s) {
     fam.status = s;
@@ -484,6 +566,8 @@ function openFamilySheet(f) {
     $('famArrive').value = f ? f.arrive : '';
     $('famLeave').value = f ? f.leave : '';
     $('famNotes').value = f ? f.notes : '';
+    $('famFlight').value = f ? (f.flight || '') : '';
+    renderFlightPreview();
     $('famSave').textContent = f ? 'Save changes' : 'Add family';
     show('famDelete', !!f);
     // Pre-fill likely times from the event's dates for a new family
@@ -499,7 +583,7 @@ async function saveFamily() {
     if (!name) { toast('Please enter a family name.'); return $('famName').focus(); }
     const arrive = $('famArrive').value, leave = $('famLeave').value;
     if (arrive && leave && leave <= arrive) return toast('Leaving time must be after arrival.');
-    const data = { name, count: fam.count, status: fam.status, arrive, leave, notes: $('famNotes').value.trim() };
+    const data = { name, count: fam.count, status: fam.status, arrive, leave, notes: $('famNotes').value.trim(), flight: $('famFlight').value.trim() };
     const btn = $('famSave');
     btn.disabled = true;
     try {

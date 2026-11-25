@@ -4,12 +4,12 @@
 //
 // Two tabs are created automatically the first time the app calls it:
 //   Events   : id, name, startDate, endDate, location, notes, created, slug
-//   Families : id, eventId, name, count, status, arrive, leave, notes
+//   Families : id, eventId, name, count, status, arrive, leave, notes, flight
 
 const SHEET_ID = '13GKm58mqYhb7DQKM4BtRSvwfu3PGJksjKH9akbqXoGI';
 const TABS = {
     Events: ['id', 'name', 'startDate', 'endDate', 'location', 'notes', 'created', 'slug'],
-    Families: ['id', 'eventId', 'name', 'count', 'status', 'arrive', 'leave', 'notes']
+    Families: ['id', 'eventId', 'name', 'count', 'status', 'arrive', 'leave', 'notes', 'flight']
 };
 const DATE_FIELDS = { startDate: 'yyyy-MM-dd', endDate: 'yyyy-MM-dd', arrive: "yyyy-MM-dd'T'HH:mm", leave: "yyyy-MM-dd'T'HH:mm" };
 
@@ -77,7 +77,7 @@ function familyEvent(id) {
 
 function insertFamily(eventId, f) {
     const count = Math.max(1, Math.round(Number(f.count)) || 1);
-    insert('Families', { id: newId(), eventId, name: need(f, 'name'), count, status: f.status || 'maybe', arrive: f.arrive || '', leave: f.leave || '', notes: f.notes || '' });
+    insert('Families', { id: newId(), eventId, name: need(f, 'name'), count, status: f.status || 'maybe', arrive: f.arrive || '', leave: f.leave || '', notes: f.notes || '', flight: f.flight || '' });
 }
 
 // ---------- Sheet helpers ----------
